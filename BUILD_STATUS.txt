@@ -1,0 +1,16 @@
+SKILLSETRA FINAL DEMO BUILD STATUS — 02 Oct 2026
+
+Demo mode: ENABLED by default
+Supabase authentication required for demo: NO
+Bundled demo SQLite workspace: YES
+Bundled learning materials: YES
+Supplied roadmap asset: YES
+Same-origin Next.js -> FastAPI proxy: YES
+Puter primary AI: YES
+Ollama secondary/local: YES
+Gemini runtime/configuration: REMOVED
+Compiler Lab: REMOVED
+Backend Python compilation: PASS
+Core demo API smoke tests: PASS (health, roles, dashboard, analytics, resources, roadmap, goal update)
+Frontend production build: NOT RUN IN THIS ENVIRONMENT because npm dependency installation timed out.
+Docker build: NOT RUN IN THIS ENVIRONMENT because Docker CLI is unavailable.

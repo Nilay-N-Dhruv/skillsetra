@@ -1,0 +1,19 @@
+SKILLSETRA — WHAT YOU NEED TO ENTER FOR DEMO DEPLOYMENT
+
+CORE DEMO
+No external API key is required to open the demo, load the dashboard, select roles, use the bundled roadmap, and browse the bundled learning catalog.
+
+OPTIONAL KEYS
+Supabase: only for future authenticated/production persistence.
+GitHub: only if you want real GitHub OAuth/API analysis.
+Puter: browser-side primary provider; no server secret is required by this package.
+Ollama: optional local/self-hosted provider; no API key.
+
+RECOMMENDED SINGLE-CONTAINER DEPLOYMENT
+Deploy the root Dockerfile. It runs Next.js + FastAPI together and exposes only port 3000. The browser uses same-origin /api/v1 calls.
+
+DEFAULTS
+DEMO_MODE=true
+NEXT_PUBLIC_DEMO_MODE=true
+NEXT_PUBLIC_API_BASE_URL=
+BACKEND_INTERNAL_URL=http://127.0.0.1:8000

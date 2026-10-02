@@ -1,0 +1,17 @@
+SKILLSETRA — NO-SIGN-IN LOCAL TEST
+
+Double-click START_TEST_NO_SIGNIN.bat. It will:
+1. Prepare Python and npm dependencies.
+2. Start FastAPI in DEMO_MODE=true.
+3. Start Next.js with NEXT_PUBLIC_DEMO_MODE=true.
+4. Configure Puter AI for this local test.
+5. Wait for the API and web server to become reachable.
+6. Automatically open http://localhost:3000/dashboard.
+
+No signup or signin is required.
+
+TRUTH NOTE
+The provided Puter AI key could not be live-verified from the build environment because outbound DNS/network access was unavailable. The app will show Puter AI as connected only if the live key check succeeds on the user's machine.
+
+SECURITY NOTE
+The requested API key is included in this local test package so the test can run immediately. Do not publish this ZIP. Rotate/revoke the key after testing if it has been exposed or shared.
