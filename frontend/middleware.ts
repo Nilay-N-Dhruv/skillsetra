@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';import type {NextRequest} from 'next/server';
+const protectedRoutes=['/dashboard','/competencies','/evidence','/challenges','/github','/projects','/career','/assessment','/assessments','/reasoning','/interpret','/learn','/roadmap','/profile','/settings','/onboarding','/interview','/project-defense','/analytics'];
+export function middleware(request:NextRequest){const path=request.nextUrl.pathname;if(process.env.NEXT_PUBLIC_DEMO_MODE==='true')return NextResponse.next();if(protectedRoutes.some(route=>path===route||path.startsWith(route+'/'))){const demo=request.cookies.get('skillsetra_demo_session')?.value;const session=request.cookies.get('skillsetra_session')?.value;if(!demo&&!session){const url=request.nextUrl.clone();url.pathname='/signin';url.searchParams.set('next',path);return NextResponse.redirect(url)}}return NextResponse.next()}
+export const config={matcher:['/((?!_next/static|_next/image|favicon.ico).*)']};
