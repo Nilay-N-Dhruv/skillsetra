@@ -1,6 +1,8 @@
 import time
 import uuid
 import traceback
+import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,10 +12,25 @@ from fastapi.staticfiles import StaticFiles
 from .materials import ROOT as MATERIALS_ROOT
 from .core.config import settings
 from .routes import router
+from .core.workspace import workspace_store
 
 
 # =========================================================
-# FASTAPI APPLICATION
+# VERCEL / SERVERLESS ENVIRONMENT
+# =========================================================
+
+IS_VERCEL = os.getenv("VERCEL", "").lower() == "1"
+
+# Vercel's filesystem is read-only except for /tmp.
+# Make sure temporary writable files use /tmp.
+if IS_VERCEL:
+    os.environ.setdefault("TMPDIR", "/tmp")
+    os.environ.setdefault("TEMP", "/tmp")
+    os.environ.setdefault("TMP", "/tmp")
+
+
+# =========================================================
+# FastAPI application
 # =========================================================
 
 app = FastAPI(
@@ -25,14 +42,11 @@ app = FastAPI(
 
 
 # =========================================================
-# HTTP EXCEPTION HANDLER
+# HTTPException handler
 # =========================================================
 
 @app.exception_handler(HTTPException)
-async def http_error(
-    request: Request,
-    exc: HTTPException
-):
+async def http_error(request: Request, exc: HTTPException):
     rid = (
         request.headers.get("x-skillsetra-request-id")
         or str(uuid.uuid4())
@@ -79,19 +93,15 @@ app.add_middleware(
 
 
 # =========================================================
-# REQUEST MIDDLEWARE
+# Request middleware
 # =========================================================
 
 @app.middleware("http")
-async def request_guard(
-    request: Request,
-    call_next
-):
-    # Convert:
-    # /api/example
-    #
-    # into:
-    # /api/v1/example
+async def request_guard(request: Request, call_next):
+
+    # -----------------------------------------------------
+    # Convert /api/... to /api/v1/...
+    # -----------------------------------------------------
 
     if (
         request.url.path.startswith("/api/")
@@ -110,22 +120,42 @@ async def request_guard(
     start = time.perf_counter()
 
     try:
+
+        # -------------------------------------------------
+        # Execute request
+        # -------------------------------------------------
+
         response = await call_next(request)
 
-        # =================================================
+        # -------------------------------------------------
         # IMPORTANT:
-        # DO NOT WRITE TO LOCAL DATABASE/FILES ON VERCEL
-        # =================================================
+        # Vercel filesystem is READ-ONLY.
         #
-        # Vercel serverless filesystem is read-only.
-        #
-        # Therefore we intentionally DO NOT call:
-        #
-        # workspace_store.persist()
-        #
-        # =================================================
+        # Do NOT persist workspace data on Vercel.
+        # -------------------------------------------------
 
+        if request.url.path.startswith("/api/v1"):
+
+            if not IS_VERCEL:
+
+                try:
+                    workspace_store.persist()
+
+                except Exception as persist_error:
+                    print(
+                        "Workspace persistence warning:",
+                        persist_error
+                    )
+
+            else:
+                # Vercel/serverless:
+                # skip local filesystem persistence
+                pass
+
+        # -------------------------------------------------
         # Security headers
+        # -------------------------------------------------
+
         response.headers["X-Request-ID"] = rid
 
         response.headers[
@@ -167,50 +197,28 @@ async def request_guard(
             "https://www.youtube-nocookie.com"
         )
 
-        # Optional response timing header
-        elapsed = time.perf_counter() - start
-
-        response.headers[
-            "X-Response-Time"
-        ] = f"{elapsed:.4f}s"
-
         return response
 
     except Exception as exc:
 
-        # =================================================
-        # PRINT REAL ERROR TO VERCEL LOGS
-        # =================================================
+        # -------------------------------------------------
+        # Print complete error in Vercel logs
+        # -------------------------------------------------
 
         print("=" * 70)
         print("SKILLSETRA BACKEND ERROR")
         print("=" * 70)
-
-        print(
-            f"Request: "
-            f"{request.method} "
-            f"{request.url}"
-        )
-
-        print(
-            f"Request ID: {rid}"
-        )
-
-        print(
-            f"Error Type: {type(exc).__name__}"
-        )
-
-        print(
-            f"Error: {exc}"
-        )
+        print(f"Request: {request.method} {request.url}")
+        print(f"Request ID: {rid}")
+        print(f"Error: {exc}")
 
         traceback.print_exc()
 
         print("=" * 70)
 
-        # =================================================
-        # RETURN REAL ERROR
-        # =================================================
+        # -------------------------------------------------
+        # Return actual error
+        # -------------------------------------------------
 
         return JSONResponse(
             status_code=500,
@@ -219,7 +227,6 @@ async def request_guard(
                 "error": {
                     "code": "INTERNAL_ERROR",
                     "message": str(exc),
-                    "type": type(exc).__name__,
                     "request_id": rid,
                 },
             },
@@ -230,14 +237,14 @@ async def request_guard(
 
 
 # =========================================================
-# API ROUTES
+# API routes
 # =========================================================
 
 app.include_router(router)
 
 
 # =========================================================
-# STATIC LEARNING MATERIALS
+# Learning materials static files
 # =========================================================
 
 if MATERIALS_ROOT.exists():
@@ -252,7 +259,7 @@ if MATERIALS_ROOT.exists():
 
 
 # =========================================================
-# ROOT ENDPOINT
+# Root endpoint
 # =========================================================
 
 @app.get("/")
@@ -267,11 +274,16 @@ async def root():
             if settings.demo_mode
             else "production"
         ),
+        "environment": (
+            "vercel"
+            if IS_VERCEL
+            else "local"
+        ),
     }
 
 
 # =========================================================
-# HEALTH CHECK
+# Health check
 # =========================================================
 
 @app.get("/api/v1/health")
@@ -285,5 +297,10 @@ async def health():
             "demo"
             if settings.demo_mode
             else "production"
+        ),
+        "environment": (
+            "vercel"
+            if IS_VERCEL
+            else "local"
         ),
     }
