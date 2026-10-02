@@ -10,12 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from .materials import ROOT as MATERIALS_ROOT
 from .core.config import settings
 from .routes import router
-from .core.workspace import workspace_store
 
 
-# ---------------------------------------------------------
-# FastAPI application
-# ---------------------------------------------------------
+# =========================================================
+# FASTAPI APPLICATION
+# =========================================================
 
 app = FastAPI(
     title=settings.app_name,
@@ -25,12 +24,15 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------
-# HTTPException handler
-# ---------------------------------------------------------
+# =========================================================
+# HTTP EXCEPTION HANDLER
+# =========================================================
 
 @app.exception_handler(HTTPException)
-async def http_error(request: Request, exc: HTTPException):
+async def http_error(
+    request: Request,
+    exc: HTTPException
+):
     rid = (
         request.headers.get("x-skillsetra-request-id")
         or str(uuid.uuid4())
@@ -52,9 +54,9 @@ async def http_error(request: Request, exc: HTTPException):
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # CORS
-# ---------------------------------------------------------
+# =========================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,13 +78,21 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------
-# Request middleware
-# ---------------------------------------------------------
+# =========================================================
+# REQUEST MIDDLEWARE
+# =========================================================
 
 @app.middleware("http")
-async def request_guard(request: Request, call_next):
-    # Convert /api/... to /api/v1/...
+async def request_guard(
+    request: Request,
+    call_next
+):
+    # Convert:
+    # /api/example
+    #
+    # into:
+    # /api/v1/example
+
     if (
         request.url.path.startswith("/api/")
         and not request.url.path.startswith("/api/v1/")
@@ -102,47 +112,106 @@ async def request_guard(request: Request, call_next):
     try:
         response = await call_next(request)
 
-        # Persist workspace data for API requests
-        if request.url.path.startswith("/api/v1"):
-            workspace_store.persist()
+        # =================================================
+        # IMPORTANT:
+        # DO NOT WRITE TO LOCAL DATABASE/FILES ON VERCEL
+        # =================================================
+        #
+        # Vercel serverless filesystem is read-only.
+        #
+        # Therefore we intentionally DO NOT call:
+        #
+        # workspace_store.persist()
+        #
+        # =================================================
 
-        # Security / request headers
+        # Security headers
         response.headers["X-Request-ID"] = rid
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = (
-            "strict-origin-when-cross-origin"
-        )
-        response.headers["Permissions-Policy"] = (
-            "camera=(),microphone=(),geolocation=()"
+
+        response.headers[
+            "X-Content-Type-Options"
+        ] = "nosniff"
+
+        response.headers[
+            "X-Frame-Options"
+        ] = "DENY"
+
+        response.headers[
+            "Referrer-Policy"
+        ] = "strict-origin-when-cross-origin"
+
+        response.headers[
+            "Permissions-Policy"
+        ] = (
+            "camera=(),"
+            "microphone=(),"
+            "geolocation=()"
         )
 
-        response.headers["Content-Security-Policy"] = (
+        response.headers[
+            "Content-Security-Policy"
+        ] = (
             "default-src 'self'; "
             "img-src 'self' data: https:; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "script-src 'self' 'unsafe-inline' https://js.puter.com; "
-            "connect-src 'self' https: http://localhost:11434; "
+            "style-src 'self' 'unsafe-inline' "
+            "https://fonts.googleapis.com; "
+            "font-src 'self' "
+            "https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' "
+            "https://js.puter.com; "
+            "connect-src 'self' https: "
+            "http://localhost:11434; "
             "frame-ancestors 'none'; "
-            "frame-src 'self' https://www.youtube.com "
+            "frame-src 'self' "
+            "https://www.youtube.com "
             "https://www.youtube-nocookie.com"
         )
+
+        # Optional response timing header
+        elapsed = time.perf_counter() - start
+
+        response.headers[
+            "X-Response-Time"
+        ] = f"{elapsed:.4f}s"
 
         return response
 
     except Exception as exc:
-        # Print the complete error in Vercel logs
+
+        # =================================================
+        # PRINT REAL ERROR TO VERCEL LOGS
+        # =================================================
+
         print("=" * 70)
         print("SKILLSETRA BACKEND ERROR")
         print("=" * 70)
-        print(f"Request: {request.method} {request.url}")
-        print(f"Request ID: {rid}")
-        print(f"Error: {exc}")
+
+        print(
+            f"Request: "
+            f"{request.method} "
+            f"{request.url}"
+        )
+
+        print(
+            f"Request ID: {rid}"
+        )
+
+        print(
+            f"Error Type: {type(exc).__name__}"
+        )
+
+        print(
+            f"Error: {exc}"
+        )
+
         traceback.print_exc()
+
         print("=" * 70)
 
-        # Return the actual error instead of hiding it
+        # =================================================
+        # RETURN REAL ERROR
+        # =================================================
+
         return JSONResponse(
             status_code=500,
             content={
@@ -150,6 +219,7 @@ async def request_guard(request: Request, call_next):
                 "error": {
                     "code": "INTERNAL_ERROR",
                     "message": str(exc),
+                    "type": type(exc).__name__,
                     "request_id": rid,
                 },
             },
@@ -159,31 +229,35 @@ async def request_guard(request: Request, call_next):
         )
 
 
-# ---------------------------------------------------------
-# API routes
-# ---------------------------------------------------------
+# =========================================================
+# API ROUTES
+# =========================================================
 
 app.include_router(router)
 
 
-# ---------------------------------------------------------
-# Learning materials static files
-# ---------------------------------------------------------
+# =========================================================
+# STATIC LEARNING MATERIALS
+# =========================================================
 
 if MATERIALS_ROOT.exists():
+
     app.mount(
         "/materials-static",
-        StaticFiles(directory=str(MATERIALS_ROOT)),
+        StaticFiles(
+            directory=str(MATERIALS_ROOT)
+        ),
         name="learning-materials-static",
     )
 
 
-# ---------------------------------------------------------
-# Root endpoint
-# ---------------------------------------------------------
+# =========================================================
+# ROOT ENDPOINT
+# =========================================================
 
 @app.get("/")
 async def root():
+
     return {
         "name": "SKILLSETRA API",
         "status": "running",
@@ -196,12 +270,13 @@ async def root():
     }
 
 
-# ---------------------------------------------------------
-# Health check
-# ---------------------------------------------------------
+# =========================================================
+# HEALTH CHECK
+# =========================================================
 
 @app.get("/api/v1/health")
 async def health():
+
     return {
         "success": True,
         "status": "healthy",
