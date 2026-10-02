@@ -18,3 +18,5 @@ Puter AI is the primary browser AI provider. Ollama is the secondary local provi
 
 ## Removed surface
 Compiler Lab has been removed from navigation, routes and the user-facing product surface.
+
+SkillSetra deployment update
